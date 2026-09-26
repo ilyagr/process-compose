@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/f1bonacc1/process-compose/src/loader"
@@ -27,13 +28,25 @@ func completionEntry(name, description string) string {
 // with the first line of the descriptions in the cobra-appropriate
 // "name\tdescription" format.
 //
-// When single is true (e.g. `run`, which takes exactly one PROCESS), it stops
-// offering candidates once a positional arg is already present.
+// When single is true (for `run`, which takes one PROCESS), it stops offering
+// names once PROCESS is present and falls back to the shell's default file
+// completion, since `run` passes the arguments after `--` to PROCESS.
 func completeProcessNamesFromConfig(single bool) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 		if single && len(args) != 0 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
+			// We can't tell whether `--` was typed: during completion,
+			// cmd.ArgsLenAtDash() is always >= 0 (spf13/cobra#1877).
+			return nil, cobra.ShellCompDirectiveDefault
 		}
+		// cobra parses flags twice during completion, and array flags append on
+		// the second pass, so `-f a.yaml` arrives as [a.yaml a.yaml]. Loading a
+		// file twice breaks `extends:` ("... extends itself").
+		seen := make(map[string]bool)
+		opts.FileNames = slices.DeleteFunc(opts.FileNames, func(name string) bool {
+			dup := seen[name]
+			seen[name] = true
+			return dup
+		})
 		// Avoid aborting or printing errors for e.g. unparseable YAML config
 		opts.IsInternalLoader = true
 		project, err := loader.Load(opts)
@@ -44,6 +57,8 @@ func completeProcessNamesFromConfig(single bool) func(*cobra.Command, []string, 
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
+		// Don't offer names that are already on the command line.
+		names = slices.DeleteFunc(names, func(name string) bool { return slices.Contains(args, name) })
 		comps := make([]string, len(names))
 		for i, name := range names {
 			comps[i] = completionEntry(name, project.Processes[name].Description)
@@ -67,6 +82,8 @@ func completeProcessNamesFromServer(single bool) func(*cobra.Command, []string, 
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
+		// Don't offer names that are already on the command line.
+		names = slices.DeleteFunc(names, func(name string) bool { return slices.Contains(args, name) })
 		return names, cobra.ShellCompDirectiveNoFileComp
 	}
 }
