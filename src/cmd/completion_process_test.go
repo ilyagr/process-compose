@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -202,6 +203,10 @@ func TestCompletionEntry(t *testing.T) {
 // workaround, since they'd be used to `--unix-socket` implying `-U` in all
 // other situations.
 func TestProcessStopCompletionOverUnixSocketFlag(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("--unix-socket flag is not registered on Windows")
+	}
+
 	// Fake server on a unix socket.
 	//
 	// We must keep the path short. For example, on macOS, the cap on `sun_path`
@@ -246,6 +251,9 @@ func TestProcessStopCompletionOverUnixSocketFlag(t *testing.T) {
 	*pcFlags.IsUnixSocket = false
 	config.CheckForUpdates = "false"                // PreRun would otherwise hit the network
 	*pcFlags.LogFile = filepath.Join(dir, "pc.log") // keep PreRun's setupLogger out of the real log
+	// PreRun may use the client log instead (e.g. for completion requests),
+	// which honors PC_LOG_FILE.
+	t.Setenv(config.LogPathEnvVarName, filepath.Join(dir, "pc.log"))
 
 	var out, errb bytes.Buffer
 	rootCmd.SetOut(&out)
