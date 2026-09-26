@@ -3,10 +3,15 @@ package cmd
 import (
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/f1bonacc1/process-compose/src/loader"
 	"github.com/spf13/cobra"
 )
+
+// completionServerTimeout bounds how long <TAB> can wait for an unresponsive
+// server.
+const completionServerTimeout = 2 * time.Second
 
 // completionEntry formats a process name and its optional description as a
 // cobra completion candidate.
@@ -81,9 +86,11 @@ func completeProcessNamesFromServer(single bool) func(*cobra.Command, []string, 
 		if isUnixSocketMode(cmd) {
 			*pcFlags.IsUnixSocket = true
 		}
+		client := getClient()
+		client.SetTimeout(completionServerTimeout)
 		// Names only, no descriptions. TODO: consider adding process
 		// descriptions to the server's `/processes` response.
-		names, err := getClient().GetLexicographicProcessNames()
+		names, err := client.GetLexicographicProcessNames()
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/f1bonacc1/process-compose/src/api"
 	"github.com/f1bonacc1/process-compose/src/app"
@@ -43,7 +44,12 @@ func (f *fakeProject) GetProcessState(name string) (*types.ProcessState, error) 
 
 func newTestClient(t *testing.T, project app.IProject) *PcClient {
 	t.Helper()
-	srv := httptest.NewServer(api.InitRoutes(false, api.NewPcApi(project)))
+	return newTestClientForHandler(t, api.InitRoutes(false, api.NewPcApi(project)))
+}
+
+func newTestClientForHandler(t *testing.T, handler http.Handler) *PcClient {
+	t.Helper()
+	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	host, portStr, err := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
 	if err != nil {
@@ -54,6 +60,25 @@ func newTestClient(t *testing.T, project app.IProject) *PcClient {
 		t.Fatalf("failed to parse test server port %s: %v", portStr, err)
 	}
 	return NewTcpClient(host, port, 100)
+}
+
+func TestSetTimeout(t *testing.T) {
+	c := newTestClientForHandler(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		// Never answer, like a hung server.
+		select {
+		case <-r.Context().Done():
+		case <-time.After(3 * time.Second):
+		}
+	}))
+	c.SetTimeout(50 * time.Millisecond)
+
+	start := time.Now()
+	if _, err := c.GetProcessesName(); err == nil {
+		t.Error("GetProcessesName succeeded; want a timeout error")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("GetProcessesName took %v; want it to give up after ~50ms", elapsed)
+	}
 }
 
 func TestRestartProcess_NameWithSlash(t *testing.T) {

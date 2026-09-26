@@ -88,6 +88,12 @@ func newClient(address string, client *http.Client, logLength int) *PcClient {
 	}
 }
 
+// SetTimeout limits how long each request made by the client may take, for
+// latency-sensitive callers like shell completion. Zero means no limit.
+func (p *PcClient) SetTimeout(timeout time.Duration) {
+	p.client.Timeout = timeout
+}
+
 func (p *PcClient) ShutDownProject() error {
 	return p.shutDownProject()
 }
