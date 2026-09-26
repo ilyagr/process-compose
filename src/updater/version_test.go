@@ -25,6 +25,11 @@ func TestCompareVersions(t *testing.T) {
 		{"undefined latest", "v1.0.0", "undefined", 1},
 		{"both undefined", "undefined", "undefined", 0},
 		{"zero versions", "v0.0.0", "v0.0.1", -1},
+		{"pre-release older than its release", "v1.3.0-rc.1", "v1.3.0", -1},
+		{"pre-release newer than the previous release", "v1.3.0-rc.1", "v1.2.9", 1},
+		{"pseudo-version newer than the previous release", "v1.2.4-0.20260102150405-abcdef123456+dirty", "v1.2.3", 1},
+		{"pseudo-version older than the next release", "v1.2.4-0.20260102150405-abcdef123456", "v1.2.4", -1},
+		{"build metadata ignored", "v1.2.3+custom", "v1.2.3", 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
