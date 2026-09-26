@@ -36,11 +36,12 @@ var (
 		Use:   "process-compose",
 		Short: "Processes scheduler and orchestrator",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			// Client-mode invocations log to a separate file so they don't
+			// Client-mode invocations, including shell completion requests
+			// (run on every <TAB>), log to a separate file so they don't
 			// truncate the log of a running server. GetClientLogFilePath
 			// still honors PC_LOG_FILE, so only an explicit --log-file needs
 			// to be checked here.
-			if !cmd.Flags().Changed(flagLogFile) && (isClientCmd(cmd) || *pcFlags.IsDetachedWithTui) {
+			if !cmd.Flags().Changed(flagLogFile) && (isClientCmd(cmd) || isCompletionCmd(cmd) || *pcFlags.IsDetachedWithTui) {
 				*pcFlags.LogFile = config.GetClientLogFilePath()
 			}
 			logFile = setupLogger()
@@ -53,7 +54,7 @@ var (
 			config.CliApiTokenPath = *pcFlags.ApiTokenPath
 
 			isVersionUpdate := cmd.Name() == versionUpdateCmd.Name() && cmd.Parent() != nil && cmd.Parent().Name() == versionCmd.Name()
-			if config.CheckForUpdates == "true" && !isMCPStdio && !isVersionUpdate {
+			if config.CheckForUpdates == "true" && !isMCPStdio && !isVersionUpdate && !isCompletionCmd(cmd) {
 				checkForUpdatesInBackground()
 			}
 		},
@@ -306,6 +307,13 @@ func isClientCmd(cmd *cobra.Command) bool {
 		}
 	}
 	return false
+}
+
+// isCompletionCmd reports whether cmd is cobra's hidden shell completion
+// command (`__complete`, or its `__completeNoDesc` alias), which shells run on
+// every <TAB>.
+func isCompletionCmd(cmd *cobra.Command) bool {
+	return cmd.Name() == cobra.ShellCompRequestCmd
 }
 
 func isUnixSocketMode(cmd *cobra.Command) bool {
