@@ -1,53 +1,26 @@
 package updater
 
 import (
-	"strconv"
 	"strings"
+
+	"golang.org/x/mod/semver"
 )
 
-// CompareVersions compares two semantic version strings.
+// CompareVersions compares two semantic version strings, with or without a
+// leading "v", by semver precedence: pre-releases, including the Go
+// pseudo-versions of binaries built from a checkout (e.g.
+// "v1.2.4-0.20260102150405-abcdef123456"), sort before their release, and
+// build metadata (e.g. "+dirty") is ignored.
 // Returns -1 if current < latest, 0 if equal, 1 if current > latest.
-// Non-numeric versions (e.g. "undefined") are treated as older than any numeric version.
+// Invalid versions (e.g. "undefined") are treated as older than any valid version.
 func CompareVersions(current, latest string) int {
-	currentParts := parseVersion(current)
-	latestParts := parseVersion(latest)
-
-	if currentParts == nil && latestParts == nil {
-		return 0
-	}
-	if currentParts == nil {
-		return -1
-	}
-	if latestParts == nil {
-		return 1
-	}
-
-	for i := range 3 {
-		if currentParts[i] < latestParts[i] {
-			return -1
-		}
-		if currentParts[i] > latestParts[i] {
-			return 1
-		}
-	}
-	return 0
+	return semver.Compare(withVPrefix(current), withVPrefix(latest))
 }
 
-// parseVersion strips a leading "v" and splits on "." into [major, minor, patch].
-// Returns nil if the version string is not valid semver.
-func parseVersion(v string) []int {
-	v = strings.TrimPrefix(v, "v")
-	parts := strings.SplitN(v, ".", 3)
-	if len(parts) != 3 {
-		return nil
+// withVPrefix adds the leading "v" that golang.org/x/mod/semver requires.
+func withVPrefix(v string) string {
+	if strings.HasPrefix(v, "v") {
+		return v
 	}
-	nums := make([]int, 3)
-	for i, p := range parts {
-		n, err := strconv.Atoi(p)
-		if err != nil {
-			return nil
-		}
-		nums[i] = n
-	}
-	return nums
+	return "v" + v
 }
